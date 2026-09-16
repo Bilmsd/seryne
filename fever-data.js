@@ -11,7 +11,7 @@ window.FeverData = (() => {
     q('alerts', "Depuis le début de la fièvre, avez-vous remarqué l’un de ces éléments ?", ['Vomissements répétés', 'Douleur importante ou inhabituelle', 'Convulsion', 'Comportement vraiment inhabituel', 'Autre chose qui vous inquiète particulièrement', 'Aucun de ces éléments'], { multi: true, none: '5', safe: ['5'] }),
     q('symptoms', "En dehors de la fièvre, qu’avez-vous remarqué chez Léo ?", ['Nez bouché / nez qui coule', 'Petite toux', 'Mal de gorge', "Douleur d’oreille", 'Vomissements', 'Diarrhée', 'Douleur abdominale', 'Douleur en urinant', 'Autre'], { multi: true }),
     q('onset', '', ['Oui', 'Non, modifier']),
-    q('temperature', '', ['Dans les fesses', 'Dans l’oreille', 'Sur le front', 'Sous le bras', 'Dans la bouche', 'Je ne sais pas']),
+    q('temperature', '', ['Par voie rectale', 'Dans l’oreille', 'Sur le front', 'Sous le bras', 'Dans la bouche', 'Je ne sais pas']),
     q('profile', 'Je vérifie le profil de Léo', ['Oui', 'Modifier']),
   ];
   questions.forEach((question, i) => { question.policy = i < 6 || question.id === 'profile' ? 'safety-confirmation' : question.id === 'symptoms' ? 'missing-options' : 'missing-fields'; });
