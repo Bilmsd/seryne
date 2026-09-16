@@ -8,6 +8,8 @@ window.Conversation = (() => {
   const input = document.querySelector('#message-input');
   const send = document.querySelector('#send-message');
   const typing = document.querySelector('#typing');
+  const composerNote = document.querySelector('.composer-area > p');
+  const defaultComposerNote = composerNote.textContent;
   let state = { profile: null, pending: false, timer: null };
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -111,6 +113,7 @@ window.Conversation = (() => {
     FeverFlow.stop();
     clearTimeout(state.timer);
     state = { profile: id, pending: false, timer: null, utterances: [], controller: ProfileFlows.get(id) };
+    composerNote.textContent = state.controller?.composerNote ?? defaultComposerNote;
     messages.replaceChildren();
     typing.hidden = true;
     input.value = '';

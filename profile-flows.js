@@ -5,6 +5,7 @@ window.ProfileFlows = (() => {
 })();
 ProfileFlows.register('adam', {
   greeting:'Bonjour Adam, qu’est-ce qui vous préoccupe aujourd’hui ?',
+  composerNote:'À votre rythme',
   submit: (text,ui) => AdamFlow.submit(text,ui),
   photo: ui => AdamFlow.photo(ui),
   stop: () => AdamFlow.stop(),

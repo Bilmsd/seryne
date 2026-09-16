@@ -10,7 +10,7 @@ window.AdamFlow = (() => {
   function card(text,helper){lock();current=ui.message('seryne',text,{helper});current.classList.add('adam-card');return current;}
   function record(key,value){Episode.put(state.episode,`adam.${key}`,value,{kind:'adam-answer',explicitCorrection:true});}
   function promptPhoto(){
-    const parent=card('Vous pouvez ajouter la photo pour que nous fassions le point ensemble.', 'Démonstration préprogrammée · aucune analyse médicale réelle.');
+    const parent=card('Vous pouvez ajouter la photo pour que nous fassions le point ensemble.');
     actions(parent,[button('Ajouter une photo',photo)]);focus(parent);
   }
   function clearDraft(){
@@ -65,7 +65,7 @@ window.AdamFlow = (() => {
     photoURL=attachment.src;
     const figure=el('figure','adam-photo');
     const image=attachment.image;image.alt='Image choisie par Adam';
-    figure.append(image,el('figcaption','','Vous · photo ajoutée · démonstration simulée'));
+    figure.append(image,el('figcaption','','Vous · photo ajoutée'));
     parent.classList.add('adam-multimodal');parent.append(figure);
     state.photo={src:photoURL,name:attachment.file.name,type:attachment.file.type,placeholder:false};record('photo',state.photo);
     requestAnimationFrame(()=>{if(token===generation&&state)simulatePhotoReview(figure,token);});
@@ -76,7 +76,7 @@ window.AdamFlow = (() => {
     timer=setTimeout(()=>{
       if(token!==generation||!state)return;
       timer=null;busy=false;status.remove();
-        ui.message('seryne','Je regarde la photo avec vous.',{helper:'Lecture simulée · texte de démonstration, sans analyse médicale réelle.'});
+        ui.message('seryne','Je regarde la photo avec vous.');
         const observation=ui.message('seryne','Je vois une plaque rouge arrondie, assez bien délimitée, avec un centre plus clair et un bord qui paraît légèrement squameux.\n\nPlusieurs causes peuvent donner cet aspect. La photo et les informations que vous m’avez données ne permettent pas, à elles seules, de déterminer avec certitude de quoi il s’agit.\n\n'+[AdamData.contextSentence(state),'Je vais vous poser quelques questions ciblées.'].filter(Boolean).join(' '));
         observation.classList.add('adam-observation');
         index=0;ask();focus(observation);
@@ -101,14 +101,14 @@ window.AdamFlow = (() => {
     lock();state.answers[q.id]=value;
     if(!fromMemory){record(q.id,q.options[value]);ui.message('user',q.options[value]);}
     if(value!==q.nominal){
-      const parent=card('Cette réponse mérite d’être précisée.', 'La suite adaptée à cette réponse n’est pas encore disponible dans ce scénario de démonstration. La synthèse du chemin nominal n’est pas affichée.');
+      const parent=card('Cette réponse mérite d’être précisée.', 'La suite adaptée à cette réponse n’est pas encore disponible.');
       if(q.options[value]==='Autre chose…')textForm(parent,'Décrivez simplement ce que vous avez remarqué.',text=>{record(`${q.id}.details`,text);ui.message('user',text);hold();});
       actions(parent,[button('Revoir ma réponse',()=>{delete state.answers[q.id];ask(true);},true),button('Revenir à l’accueil',ui.goHome,true)]);focus(parent);return;
     }
     if(++index===AdamData.questions.length){renderSummary();return;}
     ask();
   }
-  function hold(){const parent=card('Votre précision est notée.','Cette branche sera développée dans une prochaine version, sans conclusion médicale automatique.');actions(parent,[button('Revoir ma réponse',()=>ask(true),true),button('Revenir à l’accueil',ui.goHome,true)]);focus(parent);}
+  function hold(){const parent=card('Votre précision est notée.');actions(parent,[button('Revoir ma réponse',()=>ask(true),true),button('Revenir à l’accueil',ui.goHome,true)]);focus(parent);}
   function textForm(parent,label,callback){
     const form=el('form','inline-form');const field=el('textarea');field.id=`adam-details-${generation}-${index}`;field.required=true;field.maxLength=1000;
     const caption=el('label','',label);caption.htmlFor=field.id;const submit=el('button','message-action','Enregistrer');submit.type='submit';
