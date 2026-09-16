@@ -17,7 +17,7 @@ window.Conversation = (() => {
   function resizeInput() {
     input.style.height = 'auto';
     input.style.height = Math.min(input.scrollHeight, 112) + 'px';
-    send.disabled = state.pending || !input.value.trim();
+    send.disabled = state.pending || !input.value.trim() || state.controller?.canSend === false;
   }
   function action(label, handler, secondary = false) {
     const button = document.createElement('button');
@@ -69,7 +69,12 @@ window.Conversation = (() => {
   function submit(event) {
     event.preventDefault();
     const text = input.value.trim();
-    if (!text || state.pending || FeverFlow.active) return;
+    if (state.controller?.submit) {
+      if (state.controller.submit(text, {message,action,goHome,resizeInput})) input.value = '';
+      resizeInput();
+      return;
+    }
+    if (!text || state.pending || FeverFlow.active || state.controller?.active) return;
     messages.querySelectorAll('.message-actions button').forEach(button => { button.disabled = true; });
     state.utterances.push(text);
     state.pending = true;
@@ -82,6 +87,12 @@ window.Conversation = (() => {
       state.pending = false;
       state.timer = null;
       typing.hidden = true;
+      if (state.controller) {
+        input.blur();
+        state.controller.start(state.utterances.join('\n'), {message,action,goHome});
+        resizeInput();
+        return;
+      }
       const entry = SeryneScenarios.recognize(state.profile, text);
       if (entry) {
         const actions = [action('Continuer', () => continueScenario(entry, text))];
@@ -96,9 +107,10 @@ window.Conversation = (() => {
     }, 800);
   }
   function open(id, profile) {
+    state.controller?.stop();
     FeverFlow.stop();
     clearTimeout(state.timer);
-    state = { profile: id, pending: false, timer: null, utterances: [] };
+    state = { profile: id, pending: false, timer: null, utterances: [], controller: ProfileFlows.get(id) };
     messages.replaceChildren();
     typing.hidden = true;
     input.value = '';
@@ -111,13 +123,14 @@ window.Conversation = (() => {
     document.querySelector('.sheet-dismiss').textContent = 'Revenir à la conversation';
     syncViewport();
     resizeInput();
-    message('seryne', `Qu’est-ce qui vous inquiète pour ${profile.name} aujourd’hui ?`, {
+    message('seryne', state.controller?.greeting || `Qu’est-ce qui vous inquiète pour ${profile.name} aujourd’hui ?`, {
       helper: 'Décrivez-moi simplement ce qu’il se passe, avec vos mots.',
     });
     // Évite d’ouvrir automatiquement le clavier et laisse lire l’accueil.
     view.querySelector('.back-button').focus({ preventScroll: true });
   }
   function goHome() {
+    state.controller?.stop();
     FeverFlow.stop();
     clearTimeout(state.timer);
     state.pending = false;
@@ -140,7 +153,11 @@ window.Conversation = (() => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) submit(event);
   });
   document.querySelector('[data-conversation-home]').addEventListener('click', goHome);
-  document.querySelector('[data-photo]').addEventListener('click', photoOptions);
+  document.querySelector('[data-photo]').addEventListener('click', () => {
+    if (state.controller) {
+      if (!state.pending) state.controller.photo({message,action,goHome,resizeInput});
+    } else photoOptions();
+  });
   document.addEventListener('click', event => {
     const option = event.target.closest('[data-photo-option]');
     if (option) showSheet(option.dataset.photoOption, 'Cette option sera disponible dans une prochaine étape. Aucune photo n’est envoyée ou analysée dans cette version.');

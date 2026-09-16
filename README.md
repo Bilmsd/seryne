@@ -16,12 +16,12 @@ Le fichier `index.html` peut aussi s’ouvrir directement, ou avec l’extension
 
 ## Cette version
 
-- Accueil mobile adaptatif, identité vectorielle locale, profils fictifs de Léo et Chloé.
+- Accueil mobile adaptatif, identité vectorielle locale, profils fictifs de Léo, Chloé et Adam.
 - Bouton principal ouvrant une conversation pour le profil sélectionné ; sélection préalable proposée si nécessaire.
 - Saisie libre, envoi par bouton ou Entrée (Maj+Entrée pour un saut de ligne), réponse après 800 ms.
 - Reconnaissance de trois entrées : fièvre ou peau pour Léo, mal de tête pour Chloé.
 - Parcours fièvre de Léo : dix étapes conversationnelles, branches de prudence, aides pédagogiques, synthèse et simulation de réévaluation.
-- Céphalée et dermatologie restent limitées à leur première réponse. Caméra, galerie et illustrations réalistes restent à intégrer.
+- Céphalée de Chloé et éruption de Léo restent limitées à leur première réponse. Adam dispose d’un parcours dermatologique indépendant, décrit ci-dessous. Caméra, galerie et illustrations réalistes restent à intégrer.
 - État temporaire en mémoire uniquement : aucune donnée envoyée ou persistée, aucune notification réelle, aucune ressource distante.
 
 `styles.css` contient l’identité visuelle et les adaptations mobiles. `app.js` gère l’accueil. `conversation.js` gère l’écran de messagerie et son cycle d’envoi. `scenarios.js` contient le registre des entrées de démonstration. Le logo est dans `assets/seryne.svg`.
@@ -73,3 +73,17 @@ Les fiches respiratoire et de vitropression existantes s’ouvrent au-dessus de 
 Les illustrations du tirage, du balancement thoraco-abdominal, des autres efforts respiratoires, de la vitropression et du lavage nasal/DRP restent des **placeholders identifiés**. Les médias à intégrer devront être des images ou animations entièrement réalistes, validées séparément, jamais des schémas abstraits destinés à remplacer la reconnaissance d’un signe ou d’un geste.
 
 La simulation de réévaluation conserve le questionnaire antérieur et ajoute la réponse Mieux/Pareil/Moins bien/Nouveau symptôme à l’état structuré (`followup.evolution`) avec sa provenance. Les branches médicales suivantes ne sont pas développées.
+
+## Parcours dermatologique d’Adam
+
+Accès direct : http://127.0.0.1:4173/?profile=adam. Adam, 28 ans, est également sélectionnable sur l’accueil.
+
+Message de démonstration : « J’ai cette plaque depuis quelques jours, elle s’agrandit et ça commence vraiment à me faire flipper. Je trouve aucun rendez-vous. Vous pouvez regarder ? » Puis ajouter la photo locale et choisir : « Ça démange un peu », « Je me sens normalement », « Non, rien de particulier ». La synthèse propose surveillance, modale d’avis médical et simulation de suivi déclaratif à 48 h, sans nouvelle photo ni notification réelle.
+
+`adam-data.js` contient les données et l’extraction ciblée du contexte initial. `adam-flow.js` gère le parcours et une instance d’épisode distincte. `profile-flows.js` relie le contrôleur au profil par un registre ; `conversation.js` conserve le parcours existant comme fonctionnement par défaut. `adam.css` ajoute uniquement les styles Adam et la troisième colonne de profils. Les fichiers du parcours Léo restent inchangés.
+
+**Photo choisie sur l’appareil** : le bouton et l’icône photo d’Adam ouvrent le sélecteur d’images. Toute image décodable par le navigateur peut illustrer la démonstration. Elle s’affiche via une URL locale temporaire, libérée en quittant l’épisode ; aucun fichier n’est téléversé ou persisté. La sélection ajoute seulement une miniature au brouillon et conserve le texte saisi. La pièce jointe peut être retirée ; annuler ou retirer ne déclenche rien. Seul Envoyer avec un texte non vide et une image chargée publie un message multimodal et lance `simulatePhotoReview` : transition d’une seconde puis réponse préprogrammée, indépendamment du contenu de l’image. Un texte envoyé seul est conservé dans le contexte et laisse la saisie ouverte pour un envoi ultérieur avec photo. Une photo seule ne peut pas être envoyée. Aucune analyse réelle n’a lieu et `lesion-placeholder.svg` n’est plus utilisé par le parcours. Les questions, la synthèse, la modale et le suivi restent inchangés.
+
+L’extraction reconnaît un vocabulaire limité pour les quatre informations du message d’exemple et certaines réponses explicites aux trois questions. Une réponse connue est réutilisée ; des déclarations contradictoires restent à préciser. Ce mécanisme n’est pas une compréhension générale du langage naturel. Les réponses hors du chemin nominal sont conservées et suspendent la synthèse, avec possibilité de corriger sa réponse. La suite clinique de ces branches et de la réévaluation reste à développer.
+
+Tests : http://127.0.0.1:4173/tests/adam.html — parcours nominal, image locale, modales, suivi, réponses alternatives, séparation des épisodes et réinitialisation à 390 px. Les suites Léo et mémoire restent disponibles aux adresses indiquées plus haut.

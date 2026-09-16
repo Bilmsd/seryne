@@ -8,10 +8,14 @@
     <title>seryne — Votre famille, simplement</title>
     <link rel="icon" href="assets/seryne.svg" type="image/svg+xml">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="adam.css">
     <script src="scenarios.js" defer></script>
     <script src="episode.js" defer></script>
     <script src="fever-data.js" defer></script>
     <script src="fever-flow.js" defer></script>
+    <script src="adam-data.js" defer></script>
+    <script src="adam-flow.js" defer></script>
+    <script src="profile-flows.js" defer></script>
     <script src="conversation.js" defer></script>
     <script src="app.js" defer></script>
   </head>
@@ -44,7 +48,7 @@
 
         <section class="family" aria-labelledby="family-title">
           <div class="section-heading"><h2 id="family-title">Pour qui êtes-vous ici ?</h2><span>Votre famille</span></div>
-          <div class="profile-grid" role="group" aria-label="Choisir la personne concernée">
+          <div class="profile-grid with-adam" role="group" aria-label="Choisir la personne concernée">
             <button class="profile" type="button" data-profile="leo" aria-pressed="false">
               <span class="selection-mark" aria-hidden="true"><svg class="icon"><use href="#check"/></svg></span>
               <img class="avatar" src="assets/leo.svg" width="64" height="64" alt="">
@@ -54,6 +58,11 @@
               <span class="selection-mark" aria-hidden="true"><svg class="icon"><use href="#check"/></svg></span>
               <img class="avatar" src="assets/chloe.svg" width="64" height="64" alt="">
               <span class="profile-name">Chloé</span><span class="profile-age">27 ans</span>
+            </button>
+            <button class="profile" type="button" data-profile="adam" aria-pressed="false">
+              <span class="selection-mark" aria-hidden="true"><svg class="icon"><use href="#check"/></svg></span>
+              <img class="avatar" src="assets/adam.svg" width="64" height="64" alt="">
+              <span class="profile-name">Adam</span><span class="profile-age">28 ans</span>
             </button>
           </div>
           <button class="add-person" type="button" data-open="add"><svg class="icon" aria-hidden="true"><use href="#plus"/></svg>Ajouter une personne</button>

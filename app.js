@@ -6,6 +6,7 @@ const content = document.querySelector('#sheet-content');
 const profiles = {
   leo: { name: 'Léo', age: '4 ans', avatar: 'assets/leo.svg' },
   chloe: { name: 'Chloé', age: '27 ans', avatar: 'assets/chloe.svg' },
+  adam: { name: 'Adam', age: '28 ans', avatar: 'assets/adam.svg' },
 };
 
 function showSheet(heading, copy, markup = '') {
@@ -48,7 +49,7 @@ const panels = {
     showSheet('Vos échanges, au même endroit.', 'Vous pourrez retrouver ici vos précédentes conversations.', '<div class="notice">L’historique sera disponible dans une prochaine version.</div>');
   },
   account() {
-    showSheet('Votre espace personnel.', 'Les profils de Léo et Chloé sont des profils fictifs de démonstration.', '<div class="notice">La gestion du profil sera disponible dans une prochaine version.</div>');
+    showSheet('Votre espace personnel.', 'Les profils de Léo, Chloé et Adam sont des profils fictifs de démonstration.', '<div class="notice">La gestion du profil sera disponible dans une prochaine version.</div>');
   },
   choose() {
     const choices = Object.entries(profiles).map(([id, p]) => `
@@ -66,13 +67,13 @@ const panels = {
   },
   add() {
     showSheet('Une place pour chacun.',
-      'Les profils de Léo et Chloé vous permettent de découvrir Seryne.',
+      'Les profils de Léo, Chloé et Adam vous permettent de découvrir Seryne.',
       '<div class="notice">L’ajout d’une personne sera disponible dans une prochaine version du prototype.</div>');
   },
   demos() {
-    showSheet('Trois situations du quotidien.',
-      'Choisissez un profil, puis décrivez une fièvre ou des boutons pour Léo, ou un mal de tête pour Chloé. Le parcours fièvre est disponible jusqu’à la simulation du suivi. Les deux autres parcours restent limités à leur première réponse.',
-      '<ul class="demo-list"><li>Fièvre de Léo <span>Parcours disponible</span></li><li>Mal de tête de Chloé <span>Entrée disponible</span></li><li>Boutons de Léo <span>Entrée disponible</span></li></ul>');
+    showSheet('Quatre situations du quotidien.',
+      'Choisissez un profil, puis décrivez une fièvre ou des boutons pour Léo, un mal de tête pour Chloé ou une plaque sur la peau pour Adam. Les parcours fièvre et Adam sont disponibles jusqu’à la simulation du suivi. Les deux autres parcours restent limités à leur première réponse.',
+      '<ul class="demo-list"><li>Fièvre de Léo <span>Parcours disponible</span></li><li>Mal de tête de Chloé <span>Entrée disponible</span></li><li>Boutons de Léo <span>Entrée disponible</span></li><li>Peau d’Adam <span>Parcours disponible · photo à intégrer</span></li></ul>');
   },
 };
 
@@ -96,3 +97,10 @@ document.querySelector('[data-home]').addEventListener('click', () => {
 });
 
 sheet.addEventListener('close', () => { startAfterSelection = false; });
+
+// Lien local de démonstration : ouvre le profil sans préremplir de données médicales.
+const initialProfile = new URLSearchParams(window.location.search).get('profile');
+if (initialProfile && profiles[initialProfile]) {
+  chooseProfile(initialProfile);
+  Conversation.open(initialProfile, profiles[initialProfile]);
+}

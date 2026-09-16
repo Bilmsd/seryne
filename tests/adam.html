@@ -1,0 +1,106 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Tests Adam</title><style>body{margin:0;background:#e9ede7;font:13px sans-serif}iframe{width:390px;height:844px;border:0}#results{position:absolute;left:410px;top:20px;white-space:pre-wrap;max-width:650px}</style><iframe id="app" src="../index.html?profile=adam" title="Adam 390 px"></iframe><pre id="results">Tests en cours…</pre><script>
+const frame=document.querySelector('#app'),results=document.querySelector('#results');let checks=0;
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function assert(value,label){if(!value)throw Error(label);checks++;}
+frame.addEventListener('load',async()=>{
+ const w=frame.contentWindow,d=w.document,errors=[];w.addEventListener('error',event=>errors.push(event.message));
+ const nominal='J’ai cette plaque depuis quelques jours, elle s’agrandit et ça commence vraiment à me faire flipper. Je trouve aucun rendez-vous. Vous pouvez regarder ?';
+ const visible=node=>node&&!node.closest('[hidden]')&&!node.disabled&&node.getClientRects().length;
+ function click(label,root=d){const node=[...root.querySelectorAll('button')].find(b=>visible(b)&&b.textContent.trim()===label);assert(node,'Bouton '+label);node.click();}
+ function latest(){return [...d.querySelectorAll('[data-adam-question]')].at(-1);}
+ async function answer(i){const node=latest().querySelector(`[data-adam-answer="${i}"]`);assert(node&&!node.disabled,'Réponse Adam '+i);node.click();await wait(80);}
+ function reset(profile='adam'){d.querySelector('[data-conversation-home]').click();d.querySelector(`[data-profile="${profile}"]`).click();d.querySelector('[data-open="start"]').click();}
+ function write(text){const input=d.querySelector('#message-input');input.value=text;input.dispatchEvent(new w.Event('input'));}
+ async function send(text=nominal){write(text);d.querySelector('#composer').requestSubmit();await wait(900);}
+ // Le test pilote des fichiers réels du navigateur sans ouvrir une fenêtre système.
+ let pickerRequests=0;const nativeClick=w.HTMLInputElement.prototype.click;
+ w.HTMLInputElement.prototype.click=function(){if(this.type==='file'){pickerRequests++;return;}return nativeClick.call(this);};
+ const canvas=d.createElement('canvas');canvas.width=320;canvas.height=180;const ctx=canvas.getContext('2d');ctx.fillStyle='#73a89a';ctx.fillRect(0,0,320,180);ctx.fillStyle='#f1ca94';ctx.fillRect(80,40,160,100);
+ const fixture=await new Promise(resolve=>canvas.toBlob(blob=>resolve(new w.File([blob],'image-personnelle.png',{type:'image/png'}))));
+ const jpeg=await new Promise(resolve=>canvas.toBlob(blob=>resolve(new w.File([blob],'autre-image.jpg',{type:'image/jpeg'})),'image/jpeg'));
+ const revoked=[];const revoke=w.URL.revokeObjectURL.bind(w.URL);w.URL.revokeObjectURL=url=>{revoked.push(url);revoke(url);};
+ function selectFile(file=fixture){const input=d.querySelector('#adam-photo-input');assert(input?.accept==='image/*','Sélecteur image compatible');const transfer=new w.DataTransfer();if(file)transfer.items.add(file);input.files=transfer.files;input.dispatchEvent(new w.Event('change'));}
+ async function photo(){click('Ajouter une photo');selectFile();await wait(100);await send('Voici la photo.');await wait(300);}
+ try{
+  assert(d.querySelector('#conversation-name').textContent==='Adam','Lien direct Adam');
+  assert(d.querySelector('#messages').textContent.includes('Bonjour Adam'),'Accueil personnalisé');
+  assert(d.querySelectorAll('.profile').length===3,'Trois profils distincts');
+  const model=w.AdamData.create(nominal);assert(model.episode.facts['skin.onset'].value==='quelques jours','Durée mémorisée');assert(model.episode.facts['skin.expanding'].value===true,'Extension mémorisée');assert(model.episode.facts['skin.worried'].value===true,'Inquiétude mémorisée');assert(model.episode.facts['skin.wantsPhoto'].value===true,'Souhait photo mémorisé');
+  assert(!w.AdamData.contextSentence(w.AdamData.create('Une plaque')),'Pas de contexte inventé');
+  assert(!w.AdamData.contextSentence(w.AdamData.create('Elle ne s’agrandit pas')),'Négation extension conservée');
+  const targets=[];const put=w.Episode.put;w.Episode.put=(episode,...args)=>{targets.push({episode,key:args[0],value:args[1]});return put(episode,...args);};
+  const recordOptions=w.Episode.recordOptions;w.Episode.recordOptions=(episode,question,...args)=>{targets.push({episode,key:'question.'+question.id});return recordOptions(episode,question,...args);};
+  write(nominal);
+  d.querySelector('[data-photo]').click();assert(pickerRequests===1,'Icône ouvre le sélecteur');d.querySelector('#adam-photo-input').dispatchEvent(new w.Event('cancel'));await wait(1100);
+  assert(d.querySelector('#message-input').value===nominal&&!d.querySelector('.adam-photo-status')&&!w.AdamFlow.active,'Annulation conserve le texte sans progression');
+  d.querySelector('[data-photo]').click();selectFile(null);await wait(80);assert(!d.querySelector('#adam-photo-draft'),'Sélection vide sans pièce jointe');
+  d.querySelector('[data-photo]').click();selectFile(new w.File(['illisible'],'image-cassee.png',{type:'image/png'}));await wait(150);assert(!d.querySelector('.adam-photo')&&!d.querySelector('[data-adam-question]'),'Image illisible ne fait pas avancer');
+  assert(d.querySelector('#message-input').value===nominal,'Erreur de chargement conserve le texte');
+  d.querySelector('[data-photo]').click();selectFile();await wait(100);
+  assert(d.querySelector('#adam-photo-draft img').naturalWidth===320,'Miniature de la photo choisie dans le brouillon');
+  assert(d.querySelector('#message-input').value===nominal,'Sélection conserve le texte saisi');
+  assert(!d.querySelector('.adam-photo-status')&&!d.querySelector('[data-adam-question]')&&!d.querySelector('.message-user'),'Sélection ne vaut pas envoi');
+  if(new URLSearchParams(location.search).get('snapshot')==='draft'){results.textContent='Adam brouillon — 390 px';return;}
+  const removedURL=d.querySelector('#adam-photo-draft img').src;click('Retirer la photo');
+  assert(!d.querySelector('#adam-photo-draft')&&revoked.includes(removedURL)&&d.querySelector('#message-input').value===nominal,'Retrait libère la pièce jointe et conserve le texte');
+  await wait(1100);assert(!d.querySelector('.adam-photo-status'),'Retrait sans analyse différée');
+  d.querySelector('[data-photo]').click();selectFile();await wait(100);
+  const draftURL=d.querySelector('#adam-photo-draft img').src;d.querySelector('[data-photo]').click();d.querySelector('#adam-photo-input').dispatchEvent(new w.Event('cancel'));await wait(1100);
+  assert(d.querySelector('#adam-photo-draft img').src===draftURL&&d.querySelector('#message-input').value===nominal,'Annuler un remplacement conserve le brouillon');
+  assert(!d.querySelector('.adam-photo-status'),'Aucune transition avant Envoyer');
+  d.querySelector('#send-message').click();await wait(100);
+  const multimodal=d.querySelector('.message-user.adam-multimodal');
+  assert(multimodal?.querySelector('p').textContent===nominal&&!!multimodal.querySelector('.adam-photo'),'Texte et photo dans un seul message utilisateur');
+  assert(d.querySelectorAll('.message-user').length===1&&!d.querySelector('#adam-photo-draft'),'Brouillon consommé une seule fois');
+  d.querySelector('#composer').requestSubmit();assert(d.querySelectorAll('.message-user').length===1,'Pas de double envoi');
+  assert(d.querySelector('.adam-photo-status')?.textContent==='Seryne examine la photo…','Transition uniquement après envoi');assert(!d.querySelector('[data-adam-question]'),'Pas de question avant la transition');
+  const image=d.querySelector('.adam-photo img');assert(image.complete&&image.naturalWidth===320&&image.naturalHeight===180,'Image choisie réellement décodée');
+  const displayed=await (await w.fetch(image.src)).blob();assert(displayed.size===fixture.size&&displayed.type===fixture.type,'Affichage du fichier sélectionné');
+  assert(image.src===draftURL&&!revoked.includes(draftURL),'Photo transférée du brouillon au message sans perdre son URL');assert(image.getBoundingClientRect().width<=390,'Photo adaptée à 390 px');
+  const sentEpisode=targets.find(item=>item.key==='adam.photo').episode;assert(sentEpisode.facts['skin.onset'].value==='quelques jours'&&sentEpisode.facts['skin.expanding'].value===true,'Texte multimodal extrait dans le même épisode');
+  await wait(500);assert(!!d.querySelector('.adam-photo-status'),'Simulation encore en cours avant une seconde');await wait(600);assert(!d.querySelector('.adam-photo-status')&&!!d.querySelector('[data-adam-question]'),'Suite automatique après environ une seconde');
+  const observed=d.querySelector('.adam-observation').textContent;
+  assert(d.querySelector('#messages').textContent.includes('il y a quelques jours et qu’elle s’agrandit'),'Contexte repris sans question redondante');
+  if(new URLSearchParams(location.search).get('snapshot')==='photo'){image.scrollIntoView({block:'start'});await wait(400);results.textContent='Adam photo — 390 px';return;}
+  await answer(0);await answer(0);await answer(0);
+  assert(d.querySelectorAll('[data-adam-question]').length===3,'Seulement trois questions');
+  assert(d.querySelector('#adam-summary').textContent.includes('compatibles avec une mycose superficielle'),'Synthèse prudente');
+  assert(!d.querySelector('#adam-summary').querySelector('a[href^="tel:"]'),'Pas de CTA urgence nominal');
+  if(new URLSearchParams(location.search).get('snapshot')==='summary'){results.textContent='Adam synthèse — 390 px';return;}
+  await wait(300);const before=d.querySelector('#adam-summary').textContent,pos=d.querySelector('#message-scroll').scrollTop;
+  click('Quand faut-il demander un avis médical ?');const modal=d.querySelector('#adam-medical-help');assert(modal.open&&modal.querySelectorAll('.advice-card').length===4,'Modale quatre blocs');assert(modal.getBoundingClientRect().width<=390,'Modale mobile');assert(!modal.querySelector('a[href^="tel:"]'),'Pas de 15/112 dans modale');
+  if(new URLSearchParams(location.search).get('snapshot')==='modal'){results.textContent='Adam modale — 390 px';return;}
+  click('Revenir au point sur ma peau',modal);
+  assert(d.querySelector('#adam-summary').textContent===before,'Retour sans modification');assert(Math.abs(d.querySelector('#message-scroll').scrollTop-pos)<2,'Position conservée');
+  click('Quand faut-il demander un avis médical ?');d.querySelector('#adam-medical-help .close-button').click();assert(!d.querySelector('#adam-medical-help'),'Fermeture croix');
+  click('Oui, dans 48 h');click('Simuler le point dans 48 h');assert(d.querySelectorAll('#adam-followup .message-action').length===7,'Sept choix déclaratifs');assert(!d.querySelector('#adam-followup').textContent.includes('photo'),'Aucune nouvelle photo requise');click('Elle s’est étendue');
+  const first=targets.find(item=>item.key==='adam.photo').episode;assert(first.facts['adam.followup.evolution'].value==='Elle s’est étendue','Suivi enrichit épisode Adam');click('Revoir les réponses');click('Autre chose…');
+  const text=d.querySelector('#adam-followup textarea');text.value='Une nouvelle remarque';text.closest('form').requestSubmit();assert(first.facts['adam.followup.details'].value==='Une nouvelle remarque','Précision suivi enregistrée');
+  click('Revoir notre échange');click('Revenir au point sur ma peau');assert(!d.querySelector('#adam-summary').hidden,'Retour échange');
+  const previousURL=image.src;reset();assert(revoked.includes(previousURL),'URL locale libérée à la réinitialisation');assert(!d.querySelector('.adam-photo'),'Nouvel Adam réinitialisé');await send();await photo();await answer(2);assert(!d.querySelector('#adam-summary'),'Douleur ne produit pas la synthèse nominale');click('Revoir ma réponse');await answer(0);await answer(1);assert(!d.querySelector('#adam-summary'),'Fièvre non nominale suspendue');click('Revoir ma réponse');await answer(0);await answer(1);assert(!d.querySelector('#adam-summary'),'Piqûre non nominale suspendue');
+  click('Revoir ma réponse');await answer(4);const field=[...d.querySelectorAll('.adam-card textarea')].at(-1);field.value='<b>Un autre contexte</b>';field.closest('form').requestSubmit();assert(!d.querySelector('.adam-card b'),'Texte libre échappé');
+  reset('leo');assert(!d.querySelector('#conversation').classList.contains('adam-conversation'),'Style Adam retiré');assert(d.querySelector('#messages').textContent.includes('pour Léo'),'Léo conserve son introduction');await send('Léo a 39,7 depuis ce soir');click('Continuer');
+  const choice=[...d.querySelectorAll('.question-card')].at(-1).querySelector('[data-answer="1"]');choice.click();await wait(310);
+  const leo=targets.find(item=>item.key==='question.general').episode;assert(leo!==first&&!Object.keys(leo.facts).some(key=>key.startsWith('adam.')),'États Léo/Adam isolés');
+  reset();await send();click('Ajouter une photo');selectFile();await wait(100);write('Voici la photo.');d.querySelector('#composer').requestSubmit();await wait(100);reset('leo');await wait(1200);assert(!d.querySelector('.adam-observation'),'Timer photo annulé au retour');
+  reset();await send();await photo();await answer(0);await answer(0);await answer(0);click('Pas maintenant');click('Choisir un moment');click('Choisir un autre moment');click('Dans 72 h');click('Simuler le point dans 72 h');click('Elle diminue');
+  reset();await send(nominal+' Ça démange un peu.');await photo();assert(latest().dataset.adamQuestion==='general','Démangeaison initiale connue non redemandée');await answer(0);await answer(0);assert(!!d.querySelector('#adam-summary'),'Synthèse avec réponse initiale réutilisée');
+  reset();await send(nominal+' Ça démange un peu. Je me sens normalement. Rien de particulier.');await photo();assert(!d.querySelector('[data-adam-question]')&&!!d.querySelector('#adam-summary'),'Trois réponses explicites connues : pas de questions redondantes');
+  reset();await send(nominal+' Ça démange un peu. J’ai de la fièvre.');await photo();assert(!d.querySelector('#adam-summary')&&d.querySelector('#messages').textContent.includes('Cette réponse mérite'),'Fièvre initiale conservée : synthèse nominale suspendue');click('Revoir ma réponse');await answer(0);await answer(0);assert(!!d.querySelector('#adam-summary'),'Correction explicite possible');
+  assert(w.AdamData.create('Ça démange un peu. Ça fait mal.').episode.facts['adam.sensation'].status==='ambiguous','Déclarations contradictoires à préciser');
+  assert(!w.AdamData.create('Je ne sais pas si j’ai de la fièvre.').episode.facts['adam.general'],'Incertitude non transformée en réponse normale');
+  reset();d.querySelector('[data-photo]').click();selectFile(jpeg);await wait(1200);
+  assert(d.querySelector('#send-message').disabled&&!d.querySelector('.adam-photo-status')&&!d.querySelector('[data-adam-question]'),'Photo seule : envoi désactivé, aucune progression');
+  d.querySelector('#composer').requestSubmit();assert(!d.querySelector('.message-user'),'Photo seule : validation formulaire sans effet');
+  assert(d.querySelector('#adam-photo-draft').textContent.includes('Ajoutez quelques mots'),'Invitation courte à expliquer la photo');
+  await send(nominal);await wait(300);assert(d.querySelector('.adam-photo img').naturalWidth===320&&!!d.querySelector('[data-adam-question]'),'Photo puis texte puis Envoyer : scénario JPEG');
+  assert(d.querySelector('.adam-observation').textContent===observed,'Même réponse préprogrammée pour une autre image');
+  reset();await send();assert(!d.querySelector('.composer-area').hidden&&!d.querySelector('.adam-photo-status')&&!d.querySelector('[data-adam-question]'),'Texte seul : conversation reste ouverte sans analyse photographique');
+  await send('Ça démange un peu.');await photo();assert(latest().dataset.adamQuestion==='general','Textes antérieurs conservés lors de l’envoi multimodal ultérieur');
+  reset();write(nominal);d.querySelector('[data-photo]').click();selectFile();await wait(100);const pendingURL=d.querySelector('#adam-photo-draft img').src;reset('leo');assert(!d.querySelector('#adam-photo-draft')&&revoked.includes(pendingURL),'Brouillon Adam libéré au passage à Léo');
+  reset();await send();click('Ajouter une photo');const stale=d.querySelector('#adam-photo-input');reset('leo');const transfer=new w.DataTransfer();transfer.items.add(fixture);stale.files=transfer.files;stale.dispatchEvent(new w.Event('change'));await wait(1100);assert(!d.querySelector('.adam-photo')&&!d.querySelector('.adam-photo-status'),'Sélection tardive ignorée après changement de profil');
+  assert(d.documentElement.scrollWidth===390,'Pas de débordement mobile');assert(errors.length===0,'Aucune erreur JavaScript : '+errors.join());
+  results.textContent='PASS — '+checks+' vérifications Adam : parcours, brouillon multimodal, envoi explicite, annulation, transition photo, modales, suivi, branches, isolation et réinitialisation.';
+ }catch(error){results.textContent='FAIL après '+checks+' vérifications : '+error.stack;}
+});
+</script></html>
