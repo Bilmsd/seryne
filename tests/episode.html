@@ -1,0 +1,27 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Tests de mémoire conversationnelle</title><pre id="results"></pre><script src="../episode.js"></script><script src="../fever-data.js"></script><script>
+let checks=0;
+const assert=(condition,label)=>{if(!condition)throw Error(label);checks++;};
+try {
+ const initial='Léo a 39,7 depuis ce soir, il a le nez qui coule et tousse un peu, je ne sais pas si je dois m’inquiéter';
+ const s=FeverData.context(initial), e=s.episode, q=FeverData.questions.find(q=>q.id==='symptoms');
+ assert(e.facts.fever.value===true,'Fièvre présente');assert(e.facts.temperature.value===39.7,'39,7');assert(e.facts.onset.value==='ce soir','Début');
+ assert(e.facts.cough.intensity==='mild' && Episode.known(e,'cough'),'Toux légère certaine malgré inquiétude finale');
+ let p=Episode.plan(e,q);assert(!p.options.some(o=>['0','1'].includes(o.id)),'Nez et toux exclus');assert(p.options.some(o=>o.id==='2'),'Gorge manquante');
+ Episode.ingest(e,'Il a aussi mal à la gorge',{kind:'later-message'});p=Episode.plan(e,q);assert(!p.options.some(o=>o.id==='2'),'Nouvelle réponse réutilisée');
+ Episode.ingest(e,'Il ne tousse pas',{kind:'later-message'});assert(e.facts.cough.status==='ambiguous','Contradiction conservée');assert(Episode.plan(e,q).options.some(o=>o.id==='1'),'Contradiction à préciser');
+ Episode.ingest(e,'Finalement il ne tousse plus',{kind:'correction'});assert(e.facts.cough.value===false && Episode.known(e,'cough'),'Correction explicite');
+ assert(!Episode.plan(e,q).options.some(o=>o.id==='1'),'Absence déclarée également connue');
+ const uncertain=Episode.ingest(Episode.create(),'Je ne sais pas s’il tousse');assert(!Episode.known(uncertain,'cough'),'Incertitude non normale');
+ const neg=Episode.ingest(Episode.create(),'Pas de diarrhée, il a mal au ventre');assert(neg.facts.diarrhea.value===false && neg.facts.abdominal.value===true,'Portée locale négation');
+ assert(!Episode.known(neg,'ear'),'Non mentionné reste inconnu');
+ assert(Episode.plan(e,FeverData.questions[0]).reason==='safety-confirmation','Exception sécurité explicite');
+ const multiple=FeverData.context(['Léo a le nez qui coule','Il tousse un peu, 39,7 depuis ce soir']);assert(Episode.present(multiple.episode).length===2,'Tous les messages avant démarrage');
+ const known=FeverData.context('39,7 depuis ce soir, température prise sous le bras');assert(Episode.plan(known.episode,FeverData.questions[8]).skip,'Mesure et méthode connues non redemandées');
+ assert(Episode.plan(known.episode,FeverData.questions[7]).skip,'Chronologie connue non redemandée');
+ const later=FeverData.context('Fièvre');
+ FeverData.record(later,FeverData.questions[2],['3']);assert(!Episode.plan(later.episode,q).options.some(o=>o.id==='4'),'Vomissements recueillis par réponse structurée non redemandés');
+ const partial=Episode.create();Episode.recordOptions(partial,q,['0'],{kind:'choice'});assert(!Episode.known(partial,'diarrhea'),'Option non cochée non assimilée à absence');
+ const history=e.events.length;Episode.put(e,'custom.fact','value',{kind:'test'});assert(Episode.plan(e,{requires:['custom.fact']}).skip,'Mécanisme générique indépendant des symptômes');assert(e.events.length===history+1,'Historique conservé');
+ document.querySelector('#results').textContent=`PASS — ${checks} vérifications extraction, négations, conflits, mémoire et planification générique.`;
+} catch(error){document.querySelector('#results').textContent='FAIL '+error.stack;}
+</script></html>

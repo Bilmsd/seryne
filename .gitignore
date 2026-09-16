@@ -1,0 +1,34 @@
+# Secrets et paramètres locaux
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Configuration privée des outils et éditeurs
+.codex/
+.agents/
+.vscode/
+.idea/
+
+# Fichiers système et temporaires
+.DS_Store
+._*
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*~
+
+# Dépendances, caches et résultats de tests
+node_modules/
+__pycache__/
+*.py[cod]
+.cache/
+coverage/
+playwright-report/
+test-results/

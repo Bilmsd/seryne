@@ -1,0 +1,194 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><title>Tests du parcours fièvre</title>
+<style>body{margin:0;background:#e9ede7;font:13px sans-serif}iframe{width:390px;height:844px;border:0}#results{position:absolute;left:410px;top:20px;white-space:pre-wrap;max-width:650px}</style>
+<iframe id="app" src="../index.html" title="Prototype 390 px"></iframe><pre id="results">Tests en cours…</pre>
+<script>
+const frame = document.querySelector('#app');
+const results = document.querySelector('#results');
+let checks = 0;
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+function assert(value, label) { if (!value) throw Error(label); checks++; }
+frame.addEventListener('load', async () => {
+ const w = frame.contentWindow, d = w.document;
+ const errors = [];
+ w.addEventListener('error', event => errors.push(event.message));
+ const visible = e => e && !e.closest('[hidden]') && !e.disabled && e.getClientRects().length;
+ function find(text, root = d) { return [...root.querySelectorAll('button')].filter(visible).find(e => e.textContent.trim() === text); }
+ function click(text, root) { const e = find(text, root); assert(e, 'Bouton disponible : '+text); e.click(); }
+ function lastCard() { return [...d.querySelectorAll('.question-card')].at(-1); }
+ async function answer(id) { const e = lastCard().querySelector(`[data-answer="${id}"]`); assert(e && !e.disabled, 'Réponse active '+id); e.click(); await wait(310); }
+ async function branchAnswer(id) { const e = lastCard().querySelector(`[data-branch-answer="${id}"]`); assert(e && !e.disabled, 'Branche active '+id); e.click(); await wait(60); }
+ async function completeSymptoms() {
+   for (const id of ['0','1']) if(lastCard().querySelector(`[data-answer="${id}"]`)) await answer(id);
+   if(!lastCard().querySelector('[aria-pressed="true"]')) await answer('none');
+   click('Continuer',lastCard()); await wait(650);
+ }
+ async function start(text = 'Léo a 39,7 depuis ce soir, il est enrhumé et tousse un peu.') {
+   if (!d.querySelector('#conversation').hidden) d.querySelector('[data-conversation-home]').click();
+   d.querySelector('[data-profile="leo"]').click();
+   d.querySelector('[data-open="start"]').click();
+   const input = d.querySelector('#message-input'); input.value = text; input.dispatchEvent(new w.Event('input'));
+   d.querySelector('#composer').dispatchEvent(new w.Event('submit', { bubbles:true, cancelable:true }));
+   await wait(900); click('Continuer'); await wait(50);
+ }
+ try {
+   const model = w.FeverData;
+   assert(model.context('Il a de la fièvre').temperature.value === null, 'Pas de température inventée');
+   assert(model.context('Il a de la fièvre').onset === null, 'Pas de chronologie inventée');
+   assert(!model.canSummarize(model.context('39,7 ce soir')), 'Données manquantes non rassurantes');
+   const uncertain = model.context('39,7 ce soir, nez qui coule et petite toux');
+   uncertain.answers = {general:['1'],breathing:['0'],drinking:['0'],urine:['0'],skin:['0'],alerts:['5'],symptoms:['0','1'],onset:['0'],profile:['0']}; uncertain.temperature.method='Sur le front';
+   assert(model.canSummarize(uncertain), 'Éligibilité chemin principal');
+   uncertain.answers.urine=['3']; assert(!model.canSummarize(uncertain), 'Urines inconnues bloquent synthèse');
+   uncertain.answers.urine=['0']; uncertain.temperature.method='Je ne sais pas'; assert(!model.canSummarize(uncertain), 'Méthode inconnue ne produit pas la synthèse préprogrammée');
+   uncertain.temperature.method='Sur le front'; uncertain.temperature.value=41; assert(!model.canSummarize(uncertain), 'Autre température sans conclusion inventée');
+   assert(model.toggle(['5'], '0', '5').join() === '0', 'Aucun exclusif');
+   assert(model.toggle(['0','1'], '5', '5').join() === '5', 'Sélection Aucun retire les autres');
+   await start();
+   await answer('1');
+   if (new URLSearchParams(location.search).get('snapshot') === 'safety') { results.textContent='Séquence de sécurité — 390 px'; return; }
+   click('Voir à quoi ressemblent des difficultés respiratoires');
+   assert(d.querySelectorAll('.realistic-placeholder').length === 3, '3 repères respiratoires');
+   assert(d.querySelector('.sheet-dismiss').getClientRects().length === 0, 'Un seul CTA dans l’aide respiratoire');
+   click('J’ai regardé, continuer');
+   await answer('0'); await answer('0'); await answer('0'); await answer('0');
+   await answer('0'); await answer('5');
+   assert(lastCard().querySelector('[data-answer="0"]').getAttribute('aria-pressed') === 'false', 'Aucun désélectionne un signe');
+   click('Continuer', lastCard()); await wait(310);
+   assert(!lastCard().querySelector('[data-answer="0"]') && !lastCard().querySelector('[data-answer="1"]'), 'Symptômes initiaux non redemandés');
+   assert(lastCard().textContent.includes('tousse un peu'), 'Rappel contextualisé');
+   await completeSymptoms();
+   assert(lastCard().textContent.includes('39,7'), 'Température mémorisée');
+   await answer('0'); await answer('0'); await wait(1700);
+   assert(!d.querySelector('#fever-summary').hidden, 'Synthèse affichée');
+   assert(d.querySelector('#fever-summary').textContent.includes('Plusieurs éléments sont plutôt rassurants actuellement.'), 'Synthèse principale');
+   assert(d.querySelector('.collected-data').textContent.includes('Valeur déclarée'), 'Origine déclarée conservée');
+   if (new URLSearchParams(location.search).get('snapshot') === 'summary') { results.textContent = 'Synthèse — aperçu de contrôle 390 × 844'; return; }
+   click('Voir comment faire'); assert(d.querySelectorAll('.realistic-placeholder').length === 4, '4 étapes lavage nasal'); click('J’ai regardé');
+   await new Promise(resolve=>w.requestAnimationFrame(resolve));
+   const summaryBefore = d.querySelector('#fever-summary').textContent;
+   const historyBefore = d.querySelector('#messages').textContent;
+   const scrollBefore = d.querySelector('#message-scroll').scrollTop;
+   let memoryWrites = 0, lastMemoryWrite = null;
+   const originalPut = w.Episode.put;
+   w.Episode.put = (...args) => { memoryWrites++; lastMemoryWrite=args; return originalPut(...args); };
+   click('Quand faut-il demander de l’aide ?');
+   const safety = d.querySelector('#safety-help');
+   assert(safety.open && safety.querySelectorAll('.safety-card').length===6,'Modale sécurité dédiée : six cartes');
+   assert(safety.querySelector('a[href="tel:15"]') && safety.querySelector('a[href="tel:112"]'),'Appels 15 et 112');
+   const cards=[...safety.querySelectorAll('.safety-card')];
+   assert(cards.map(card=>card.querySelector('h3').textContent).join('|') === ['Léo devient très abattu ou difficile à réveiller','Léo a du mal à respirer','Léo ne parvient plus à boire correctement','Des taches inhabituelles apparaissent sur sa peau','Léo présente une convulsion','Son état se dégrade nettement'].join('|'),'Ordre des six cartes');
+   assert(cards[5].nextElementSibling===safety.querySelector('.safety-urgent'),'Bloc urgence après les six cartes');
+   assert(safety.querySelector('.safety-urgent').nextElementSibling===safety.querySelector('.safety-return'),'Retour après le bloc urgence');
+   assert(cards[2].textContent.includes('urine beaucoup moins que d’habitude'),'Formulation hydratation corrigée');
+   assert(cards[4].textContent.includes('Demandez une aide médicale urgente : contactez le 15 ou le 112.'),'Urgence conservée dans la carte convulsion');
+   assert(safety.querySelector('.safety-urgent h3').textContent === 'Si l’un de ces signes apparaît ou si l’état de Léo se dégrade fortement','Titre urgence corrigé');
+   assert(safety.scrollHeight>safety.clientHeight,'Scroll interne à 390 px');
+   assert(safety.getBoundingClientRect().width<=390,'Modale adaptée à 390 px');
+   if(new URLSearchParams(location.search).get('snapshot')==='help'){results.textContent='Modale sécurité — 390 px';return;}
+   safety.scrollTop=300;const safetyScroll=safety.scrollTop;
+   click('Voir à quoi cela ressemble',safety);
+   assert(safety.open && d.querySelector('#sheet').open,'Aide respiratoire au-dessus de la sécurité');
+   assert(d.querySelectorAll('#sheet [data-media-kind="photorealistic-video-loop"]').length===3,'Trois placeholders respiratoires réutilisés');
+   click('J’ai regardé, continuer',d.querySelector('#sheet'));await wait(310);
+   assert(!d.querySelector('#sheet').open && safety.open,'Retour à la sécurité après respiration');
+   assert(Math.abs(safety.scrollTop-safetyScroll)<2,'Position de lecture sécurité conservée');
+   click('Voir comment vérifier',safety);
+   assert(d.querySelectorAll('#sheet [data-media-kind="photorealistic-pressure-demo"]').length===2,'Deux placeholders vitropression réutilisés');
+   click('J’ai regardé, continuer',d.querySelector('#sheet'));await wait(310);
+   click('Revenir au point sur Léo',safety);await new Promise(resolve=>w.requestAnimationFrame(resolve));await wait(310);
+   assert(!d.querySelector('#safety-help'),'Modale retirée après fermeture');
+   assert(d.querySelector('#fever-summary').textContent===summaryBefore,'Synthèse et suivi préservés');
+   assert(d.querySelector('#messages').textContent===historyBefore,'Historique conservé');
+   assert(Math.abs(d.querySelector('#message-scroll').scrollTop-scrollBefore)<2,'Position synthèse conservée : '+scrollBefore+' → '+d.querySelector('#message-scroll').scrollTop);
+   assert(memoryWrites===0,'Consultation des aides sans mutation de mémoire');
+   click('Quand faut-il demander de l’aide ?');d.querySelector('#safety-help .close-button').click();await wait(310);
+   assert(!d.querySelector('#safety-help'),'Fermeture par croix');
+   click('Oui, dans 6 h'); click('Simuler le point dans 6 h'); click('Moins bien');
+   assert(lastMemoryWrite[1]==='followup.evolution' && lastMemoryWrite[2]==='Moins bien','Suivi enrichit la mémoire existante');
+   assert(d.querySelector('#fever-followup').textContent.includes('prochaine version'), 'Suivi sans réponse médicale inventée');
+   click('Revoir les réponses'); click('Nouveau symptôme');
+   click('Revoir notre échange'); click('Revenir à la synthèse');
+   assert(!d.querySelector('#fever-summary').hidden, 'Retour synthèse');
+   await start(); await answer('2');
+   assert(lastCard().textContent.includes('vérifier la situation plus rapidement'), 'État général prudent');
+   click('Revenir au scénario'); await answer('4');
+   assert(lastCard().textContent.includes('Essayez de lui parler'), 'État général inconnu');
+   click('Réévaluer'); await answer('1'); await answer('1');
+   assert(lastCard().textContent.includes('Voyez-vous aussi des efforts'), 'Respiration rapide caractérisée');
+   await branchAnswer('0');
+   assert(lastCard().textContent.includes('n’est pas assimilée'), 'Rapidité seule distincte de détresse');
+   click('Réévaluer ma réponse'); await answer('1'); await branchAnswer('1');
+   assert(lastCard().textContent.includes('plus rapidement'), 'Efforts visibles : prudence');
+   click('Revenir au scénario'); await answer('2');
+   assert(lastCard().textContent.includes('plus rapidement'), 'Efforts directs : prudence');
+   click('Revenir au scénario'); await answer('4');
+   assert(d.querySelector('#sheet').open, 'Aide automatique pour respiration incertaine');
+   click('J’ai regardé, continuer'); await wait(310);
+   assert(lastCard().textContent.includes('Comment respire Léo'), 'Retour direct à question respiratoire : '+lastCard().textContent);
+   await answer('0'); await answer('3');
+   assert(lastCard().textContent.includes('uriné normalement'), 'Vomissements partiels explorent urines');
+   await answer('0');
+   assert(lastCard().textContent.includes('partie des liquides conservée'), 'Liquides conservés explicitement mémorisés');
+   click('Revoir les boissons et les urines'); await answer('4'); await answer('2');
+   assert(lastCard().textContent.includes('sans liquides conservés'), 'Vomissements répétés distincts');
+   assert(lastCard().textContent.includes('pas uriné'), 'Contexte urinaire associé');
+   click('Revoir les boissons et les urines'); await answer('0'); await answer('1');
+   assert(lastCard().textContent.includes('moins que d’habitude'), 'Urines diminuées rapportées');
+   click('Revoir les boissons et les urines'); await answer('0'); await answer('3');
+   assert(lastCard().textContent.includes('inconnue'), 'Dernière miction inconnue');
+   assert(lastCard().textContent.includes('ni un signe pathologique confirmé'), 'Inconnu non pathologique par défaut');
+   click('Revoir les boissons et les urines'); await answer('5'); await answer('4');
+   assert(lastCard().textContent.includes('Quantité bue inconnue'), 'Boissons inconnues conservées');
+   click('Revoir les boissons et les urines'); await answer('0'); await answer('0'); await answer('1');
+   assert(lastCard().textContent.includes('À quoi ressemblent'), 'Éruption : mini-branche aspect');
+   click('Ajouter une photo',lastCard());click('Simuler l’ajout d’une photo');
+   assert(d.querySelector('#sheet-title').textContent.includes('ajoutée'), 'Photo simulée');d.querySelector('.close-button').click();
+   await branchAnswer('1'); await branchAnswer('1');
+   assert(lastCard().textContent.includes('pas assimilée automatiquement'), 'Éruption non automatiquement urgente');
+   click('Réévaluer ma réponse');await answer('2');await branchAnswer('0');
+   click('Comment vérifier une tache inhabituelle ?');
+   assert(d.querySelectorAll('[data-media-kind="photorealistic-pressure-demo"]').length===2,'Deux emplacements vitropression');
+   click('J’ai regardé, continuer'); await branchAnswer('1');
+   assert(lastCard().querySelector('a[href="tel:15"]'), 'Taches persistantes : appel 15');
+   assert(!lastCard().textContent.includes('purpura'), 'Aucun diagnostic affiché');
+   assert(d.querySelector('#fever-summary').hidden, 'Pas de synthèse après orientation urgente');
+   await start();await answer('1');await answer('0');await answer('0');await answer('0');await answer('1');await branchAnswer('2');await branchAnswer('2');
+   assert(lastCard().textContent.includes('incertain'), 'Vitropression inconnue garde incertitude');
+   click('Réévaluer ma réponse');await answer('1');await branchAnswer('0');await branchAnswer('0');await branchAnswer('0');
+   assert(lastCard().textContent.includes('reste à développer'), 'Blanchiment sans synthèse inventée');
+   click('Réévaluer ma réponse');await answer('0');await answer('4');
+   assert(lastCard().querySelector('textarea').getClientRects().length,'Autre inquiétude : champ immédiat');
+   assert(lastCard().querySelector('.message-action:not(.answer-option)').disabled,'Texte obligatoire avant continuer');
+   lastCard().querySelector('textarea').value='<b>Il se plaint autrement</b>';lastCard().querySelector('textarea').dispatchEvent(new w.Event('input'));
+   click('Continuer',lastCard());assert(lastCard().textContent.includes('chemin rassurant est suspendu'),'Autre inquiétude non négative');
+   assert(!d.querySelector('.recorded-answer b'),'Texte libre échappé');
+   click('Réévaluer ma réponse');await answer('0');await answer('1');await answer('2');await answer('3');click('Continuer',lastCard());
+   assert(lastCard().textContent.includes('Entre les vomissements'),'Vomissements : question dédiée');await branchAnswer('1');
+   assert(lastCard().textContent.includes('Où Léo a-t-il mal'),'Douleur : question dédiée');
+   lastCard().querySelector('textarea').value='Au ventre depuis une heure';lastCard().querySelector('form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
+   assert(lastCard().textContent.includes('convulsion'),'Convulsion : question dédiée');await branchAnswer('1');
+   assert(lastCard().textContent.includes('comment réagit-il'),'Comportement : question dédiée');await branchAnswer('2');
+   assert(lastCard().textContent.includes('suspendu'),'Plusieurs signes : pas de poursuite rassurante');
+   const completed = [...d.querySelectorAll('.completed-question')];
+   assert(completed.length>5,'Historique compacté');
+   assert(completed.every(card => [...card.querySelectorAll('button')].every(b=>b.disabled)), 'Anciens boutons désactivés');
+   assert(d.documentElement.scrollWidth===390,'Barrière sans débordement à 390px');
+   click('Réévaluer ma réponse');await answer('5');click('Continuer',lastCard());await wait(310);
+   await completeSymptoms();
+   await start('Léo a de la fièvre');
+   await answer('1');await answer('0');await answer('0');await answer('0');await answer('0');await answer('5');click('Continuer',lastCard());await wait(310);
+   await completeSymptoms();
+   assert(lastCard().querySelector('input'), 'Chronologie absente demandée');
+   lastCard().querySelector('input').value='ce soir';lastCard().querySelector('form').dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));await wait(310);
+   assert(lastCard().textContent.includes('Quelle température'), 'Température absente demandée');
+   lastCard().querySelector('input').value='39,7';lastCard().querySelector('form').dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true}));await answer('0');await answer('0');await wait(1700);
+   click('Pas maintenant');click('Choisir un moment');click('Choisir un autre moment');click('Dans 12 h');click('Simuler le point dans 12 h');click('Mieux');
+   assert(d.documentElement.scrollWidth === 390, 'Pas de débordement horizontal à 390 px');
+   click('Quelque chose a changé'); d.querySelector('#sheet textarea').value='Nouveau changement'; d.querySelector('#sheet form').dispatchEvent(new w.Event('submit',{cancelable:true,bubbles:true})); d.querySelector('.close-button').click();
+   assert(d.querySelector('.summary-outdated'), 'Synthèse antérieure explicitement signalée après changement');
+   assert(errors.length === 0, 'Aucune erreur JavaScript : '+errors.join());
+   results.textContent = 'PASS — '+checks+' vérifications. Chemin principal, synthèse, suivi, branches, aides et données manquantes.';
+   document.documentElement.dataset.testStatus = 'passed';
+ } catch(error) { results.textContent = 'FAIL après '+checks+' vérifications : '+error.stack; document.documentElement.dataset.testStatus = 'failed'; }
+});
+</script></html>
